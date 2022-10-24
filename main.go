@@ -5,6 +5,7 @@ import (
 	"net"
 )
 
+//main function
 func main() {
 	s := newServer()
 
