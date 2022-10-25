@@ -1,7 +1,7 @@
 package main
 
 import(
-	"github.com/nourelmenyawi/local-chat-server/internal"
+	"github.com/nourelmenyawi/cbChatServer/internal"
 )
 
 func main() {
