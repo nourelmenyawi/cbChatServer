@@ -2,9 +2,11 @@ package internal
 
 import (
 	"bufio"
-	"net"
-	"strings"
 	"fmt"
+	"log"
+	"net"
+	"os"
+	"sync"
 )
 
 type client struct {
@@ -13,37 +15,50 @@ type client struct {
 	commands chan<- command
 }
 
-func (c *client)readInput() {
-	msg, err := bufio.NewReader(c.conn).ReadString('\n')
+func NewClient() {
+	wg := sync.WaitGroup{}
+	conn , err := net.Dial("tcp", ":8800")
 	if err != nil {
-		return
+		log.Printf("unable to accept new connection: %s", err.Error())
 	}
+	wg.Add(2)
+	go sendMsg(conn)
+	go readMsg(conn, &wg)
+	wg.Wait()
+}
 
-	msg = strings.Trim(msg, "\r\n")
-	args := strings.Split(msg, " ")
+func sendMsg(conn net.Conn) {
+	for {
+		scanner := bufio.NewScanner(os.Stdin)
+		scanner.Scan()
 
-	cmd := strings.TrimSpace(args[0])
+		err := scanner.Err()
+		if err != nil {
+			fmt.Println(err)
+		}
 
-	switch cmd {
-	case "/name": c.commands <- command{
-		id: CMD_NAME,
-		client: c,
-		args: args,
-	}
-	case "/quit": c.commands <- command{
-		id: CMD_QUIT,
-		client: c,
-		args: args,
-	}
-	case "/msg": c.commands <- command{
-		id: CMD_MSG,
-		client: c,
-		args: args,
-	}
-	default:
-		c.err(fmt.Errorf("unknown command: %s", cmd))
+		_, e := conn.Write([]byte(scanner.Text() + "\n"))
+		if err != nil {
+			fmt.Println(e)
+		}
 	}
 }
+
+func readMsg(conn net.Conn, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for{
+		messageBuffer := make([]byte, 1024)
+		messageLength, messageError := conn.Read(messageBuffer)
+
+		if messageError != nil {
+			os.Exit(1)
+			return
+		}
+
+		fmt.Printf("%s\n", string(messageBuffer[:messageLength]))
+	}
+}
+
 
 func (c *client) err(err error) {
 	c.conn.Write([]byte("ERR: " + err.Error() + "\n"))

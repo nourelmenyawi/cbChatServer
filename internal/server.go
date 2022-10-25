@@ -5,6 +5,9 @@ import (
 	"log"
 	"net"
 	"strings"
+//	"sync"
+	"bufio"
+//	"os"
 )
 
 type server struct {
@@ -13,30 +16,29 @@ type server struct {
 }
 
 func NewServer() {
-	s := createServer()
-
+	s:= createServer()
 	go s.run()
 
-	listener, err := net.Listen("tcp", ":8080")
+	//wg:= sync.WaitGroup{} 
+
+	//Start TCP server
+	listener, err := net.Listen("tcp", ":8800")
 	if err != nil {
-		log.Fatalf("unable to start the server: %s", err.Error())
+		log.Fatalf("unable to start server: %s", err.Error())
 	}
 
 	defer listener.Close()
-	log.Printf("Started server on :8080")
-}
+	log.Printf("Started server on :8800")
 
-func NewClient() {
+	//Accept new clients
 	for {
-		conn, err := net.Dial("tcp", ":8080")
+		conn, err := listener.Accept()
 		if err != nil {
-			log.Printf("unable to accept new connection: %s", err.Error())
+			log.Printf("Unable to accept connection: %s", err.Error())
 			continue
 		}
-
-		go createClient(conn)
+		go s.createClient(conn)
 	}
-	
 }
 
 func createServer() *server {
@@ -46,23 +48,62 @@ func createServer() *server {
 	}
 }
 
-func createClient(conn net.Conn) {
+func (s *server)createClient(conn net.Conn) {
 	log.Printf("%s has connected to the sever", conn.RemoteAddr().String())
-	s := createServer()
 	c := &client{
 		conn: conn,
 		name: "anonymous",
 		commands: s.commands,
 	}
-		s.addMember(c)
-	for {
-		c.readInput()
+//	if s.checkPassword(c) == true {	
+		s.members[c.conn.RemoteAddr()] = c	
+		s.readInput(c)
+//	}
+}
+
+// func (s *server) checkPassword(c *client) bool{
+// 	c.msg("Enter Password: ")
+// 	scanner := bufio.NewScanner(os.Stdin)
+
+// 	if scanner == "Password"{
+// 		return true
+// 	} else return false	
+// }
+
+func (s *server)readInput(c *client) {
+	for{
+		msg, err := bufio.NewReader(c.conn).ReadString('\n')
+		if err != nil {
+			return
+		}
+
+		msg = strings.Trim(msg, "\r\n")
+		args := strings.Split(msg, " ")
+
+		cmd := strings.TrimSpace(args[0])
+
+		switch cmd {
+		case "/name": c.commands <- command{
+			id: CMD_NAME,
+			client: c,
+			args: args,
+		}
+		case "/quit": c.commands <- command{
+			id: CMD_QUIT,
+			client: c,
+			args: args,
+		}
+		case "/msg": c.commands <- command{
+			id: CMD_MSG,
+			client: c,
+			args: args,
+		}
+		default:
+			c.err(fmt.Errorf("unknown command: %s", cmd))
+		}
 	}
 }
 
-func (s* server) addMember(c *client) {
-	s.members[c.conn.RemoteAddr()] = c
-}
 
 func (s *server) run() {
 	for cmd := range s.commands {
@@ -85,20 +126,18 @@ func (s *server) name(c *client, args []string) {
 
 func(s *server) msg(c *client, args []string) {
 	msg := strings.Join(args[1:], " ")
-	c.msg(c.name+": "+msg)
 	s.broadcast(c, c.name+": "+msg)
 }
 
 func (s *server) quit(c *client, args []string) {
-	log.Printf("%s has left the chat", c.name)
+	message := c.name + " has left the chat"
 	c.msg("You have left the server")
 	c.conn.Close()
+	s.broadcast(c, message)
 }
 
 func (s *server) broadcast(sender *client, msg string) {
-	for addr, m := range s.members {
-		if addr != sender.conn.RemoteAddr(){
-			m.msg(msg)
-		}
+	for _, m := range s.members {
+		m.conn.Write([]byte("> " + msg + "\n"))
 	}
 } 
