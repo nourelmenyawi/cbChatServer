@@ -23,7 +23,7 @@ func NewServer() {
 	//wg:= sync.WaitGroup{}
 
 	//Start TCP server
-	listener, err := net.Listen("tcp", ":8808")
+	listener, err := net.Listen("tcp", ":8000")
 	if err != nil {
 		log.Fatalf("unable to start server: %s", err.Error())
 	}
@@ -50,21 +50,37 @@ func createServer() *server {
 }
 
 func (s *server) createClient(conn net.Conn) {
-	log.Printf("%s has connected to the sever", conn.RemoteAddr().String())
 	c := &client{
 		conn:     conn,
 		name:     "anonymous",
 		commands: s.commands,
 	}
-
+	
+	s.addName(c)
 	for {
 		if s.checkPassword(c) {
+			log.Printf("%s has connected to the sever", conn.RemoteAddr().String())
 			log.Printf("Password correct")
 			s.members[c.conn.RemoteAddr()] = c
 			s.readInput(c)
 			break
 		}
 	}
+}
+
+func(s *server) addName(c *client){
+	c.msg("What should I call you?")
+	name, err := bufio.NewReader(c.conn).ReadString('\n')
+
+	name = strings.Trim(name, "\r\n")
+	args := strings.Split(name, " ")
+
+	name = strings.TrimSpace(args[0])
+
+	if err != nil {
+		fmt.Println(err)
+	}
+	c.name = name
 }
 
 func (s *server) checkPassword(c *client) bool {
@@ -120,6 +136,24 @@ func (s *server) readInput(c *client) {
 				client: c,
 				args:   args,
 			}
+		case "/shout":
+			c.commands <- command{
+				id:     CMD_SHOUT,
+				client: c,
+				args:   args,
+			}
+		case "/spam":
+			c.commands <- command{
+				id:     CMD_SPAM,
+				client: c,
+				args:   args,
+			}
+		case "/whisper":
+			c.commands <- command{
+				id:     CMD_WHISPER,
+				client: c,
+				args:   args,
+			}
 		default:
 			c.err(fmt.Errorf("unknown command: %s", cmd))
 		}
@@ -135,6 +169,12 @@ func (s *server) run() {
 			s.msg(cmd.client, cmd.args)
 		case CMD_QUIT:
 			s.quit(cmd.client, cmd.args)
+		case CMD_SHOUT:
+			s.shout(cmd.client, cmd.args)
+		case CMD_SPAM:
+			s.spam(cmd.client, cmd.args)
+		case CMD_WHISPER:
+			s.whisper(cmd.client, cmd.args)
 		}
 	}
 }
@@ -142,6 +182,7 @@ func (s *server) run() {
 func (s *server) name(c *client, args []string) {
 	c.name = args[1]
 	c.msg(fmt.Sprintf("All right, I will call you %s", c.name))
+	log.Printf("%s has named themselves %s", c.conn.RemoteAddr().String(), c.name)
 }
 
 func (s *server) msg(c *client, args []string) {
@@ -156,8 +197,30 @@ func (s *server) quit(c *client, args []string) {
 	s.broadcast(c, message)
 }
 
+func (s *server) shout(c *client, args []string) {
+	msg := strings.Join(args[1:], " ")
+	shoutMsg := c.name + ": " + strings.ToUpper(msg)
+	s.broadcast(c, shoutMsg)
+}
+
+func (s *server) spam(c *client, args []string) {
+	msg := c.name + ": " + strings.Join(args[1:], " ")
+	for i:= 0 ; i < 5; i++ { 
+		s.broadcast(c, msg)
+	}
+}
+
 func (s *server) broadcast(sender *client, msg string) {
 	for _, m := range s.members {
 		m.conn.Write([]byte("> " + msg + "\n"))
+	}
+}
+
+func (s *server) whisper(sender *client, args []string) {
+	msg := sender.name + ": " + strings.Join(args[2:], " ")
+	for _, m := range s.members {
+		if args[1] == m.name {
+			m.conn.Write([]byte("> " + msg + "\n"))
+		}
 	}
 }

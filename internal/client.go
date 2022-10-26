@@ -17,7 +17,7 @@ type client struct {
 
 func NewClient() {
 	wg := sync.WaitGroup{}
-	conn , err := net.Dial("tcp", ":8808")
+	conn , err := net.Dial("tcp", ":8000")
 	if err != nil {
 		log.Printf("unable to accept new connection: %s", err.Error())
 	}
