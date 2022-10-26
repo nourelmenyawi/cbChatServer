@@ -5,24 +5,25 @@ import (
 	"log"
 	"net"
 	"strings"
-//	"sync"
+
+	//	"sync"
 	"bufio"
-//	"os"
+	// "os"
 )
 
 type server struct {
-	members map[net.Addr] *client
+	members  map[net.Addr]*client
 	commands chan command
 }
 
 func NewServer() {
-	s:= createServer()
+	s := createServer()
 	go s.run()
 
-	//wg:= sync.WaitGroup{} 
+	//wg:= sync.WaitGroup{}
 
 	//Start TCP server
-	listener, err := net.Listen("tcp", ":8800")
+	listener, err := net.Listen("tcp", ":8808")
 	if err != nil {
 		log.Fatalf("unable to start server: %s", err.Error())
 	}
@@ -43,35 +44,53 @@ func NewServer() {
 
 func createServer() *server {
 	return &server{
-		members: make(map[net.Addr]*client),
+		members:  make(map[net.Addr]*client),
 		commands: make(chan command),
 	}
 }
 
-func (s *server)createClient(conn net.Conn) {
+func (s *server) createClient(conn net.Conn) {
 	log.Printf("%s has connected to the sever", conn.RemoteAddr().String())
 	c := &client{
-		conn: conn,
-		name: "anonymous",
+		conn:     conn,
+		name:     "anonymous",
 		commands: s.commands,
 	}
-//	if s.checkPassword(c) == true {	
-		s.members[c.conn.RemoteAddr()] = c	
-		s.readInput(c)
-//	}
+
+	for {
+		if s.checkPassword(c) {
+			log.Printf("Password correct")
+			s.members[c.conn.RemoteAddr()] = c
+			s.readInput(c)
+			break
+		}
+	}
 }
 
-// func (s *server) checkPassword(c *client) bool{
-// 	c.msg("Enter Password: ")
-// 	scanner := bufio.NewScanner(os.Stdin)
+func (s *server) checkPassword(c *client) bool {
+	c.msg("Enter Password: ")
+	password, err := bufio.NewReader(c.conn).ReadString('\n')
 
-// 	if scanner == "Password"{
-// 		return true
-// 	} else return false	
-// }
+	password = strings.Trim(password, "\r\n")
+	args := strings.Split(password, " ")
 
-func (s *server)readInput(c *client) {
-	for{
+	pass := strings.TrimSpace(args[0])
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	if pass == "Password" {
+		c.msg("Correct Password, Welcome to the Server!")
+		return true
+	} else {
+		c.msg("Incorrect Password, Try again")
+		return false
+	}
+}
+
+func (s *server) readInput(c *client) {
+	for {
 		msg, err := bufio.NewReader(c.conn).ReadString('\n')
 		if err != nil {
 			return
@@ -83,27 +102,29 @@ func (s *server)readInput(c *client) {
 		cmd := strings.TrimSpace(args[0])
 
 		switch cmd {
-		case "/name": c.commands <- command{
-			id: CMD_NAME,
-			client: c,
-			args: args,
-		}
-		case "/quit": c.commands <- command{
-			id: CMD_QUIT,
-			client: c,
-			args: args,
-		}
-		case "/msg": c.commands <- command{
-			id: CMD_MSG,
-			client: c,
-			args: args,
-		}
+		case "/name":
+			c.commands <- command{
+				id:     CMD_NAME,
+				client: c,
+				args:   args,
+			}
+		case "/quit":
+			c.commands <- command{
+				id:     CMD_QUIT,
+				client: c,
+				args:   args,
+			}
+		case "/msg":
+			c.commands <- command{
+				id:     CMD_MSG,
+				client: c,
+				args:   args,
+			}
 		default:
 			c.err(fmt.Errorf("unknown command: %s", cmd))
 		}
 	}
 }
-
 
 func (s *server) run() {
 	for cmd := range s.commands {
@@ -123,10 +144,9 @@ func (s *server) name(c *client, args []string) {
 	c.msg(fmt.Sprintf("All right, I will call you %s", c.name))
 }
 
-
-func(s *server) msg(c *client, args []string) {
-	msg := strings.Join(args[1:], " ")
-	s.broadcast(c, c.name+": "+msg)
+func (s *server) msg(c *client, args []string) {
+	msg := c.name + ": " + strings.Join(args[1:], " ")
+	s.broadcast(c, msg)
 }
 
 func (s *server) quit(c *client, args []string) {
@@ -140,4 +160,4 @@ func (s *server) broadcast(sender *client, msg string) {
 	for _, m := range s.members {
 		m.conn.Write([]byte("> " + msg + "\n"))
 	}
-} 
+}
