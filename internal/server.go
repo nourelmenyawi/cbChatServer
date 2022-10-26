@@ -55,8 +55,17 @@ func (s *server) createClient(conn net.Conn) {
 		name:     "anonymous",
 		commands: s.commands,
 	}
-	
-	s.addName(c)
+
+	for {
+		name := s.addName(c)
+		if s.checkName(c, name) {
+			c.name = name
+			c.msg(fmt.Sprintf("All right, I will call you %s", c.name))
+			break
+		} else {
+			c.msg("This name already exists, please enter another name")
+		}
+	}
 	for {
 		if s.checkPassword(c) {
 			log.Printf("%s has connected to the sever", conn.RemoteAddr().String())
@@ -68,19 +77,27 @@ func (s *server) createClient(conn net.Conn) {
 	}
 }
 
-func(s *server) addName(c *client){
+func(s *server) addName(c *client) string{
 	c.msg("What should I call you?")
 	name, err := bufio.NewReader(c.conn).ReadString('\n')
 
 	name = strings.Trim(name, "\r\n")
 	args := strings.Split(name, " ")
-
 	name = strings.TrimSpace(args[0])
 
 	if err != nil {
 		fmt.Println(err)
 	}
-	c.name = name
+	return name
+}
+
+func(s *server) checkName(c*client, name string) bool{
+	for _, list := range s.members{
+		if name == list.name {
+			return false
+		} 
+	}
+	return true
 }
 
 func (s *server) checkPassword(c *client) bool {
@@ -180,9 +197,13 @@ func (s *server) run() {
 }
 
 func (s *server) name(c *client, args []string) {
-	c.name = args[1]
-	c.msg(fmt.Sprintf("All right, I will call you %s", c.name))
-	log.Printf("%s has named themselves %s", c.conn.RemoteAddr().String(), c.name)
+	if s.checkName(c, args[1]) {
+		c.name = args[1]
+		c.msg(fmt.Sprintf("All right, I will call you %s", c.name))
+		log.Printf("%s has named themselves %s", c.conn.RemoteAddr().String(), c.name)
+	} else {
+		c.msg("This name already exists, please enter another name")
+	}
 }
 
 func (s *server) msg(c *client, args []string) {
@@ -221,6 +242,8 @@ func (s *server) whisper(sender *client, args []string) {
 	for _, m := range s.members {
 		if args[1] == m.name {
 			m.conn.Write([]byte("> " + msg + "\n"))
+		} else {
+			sender.conn.Write([]byte("Could not find " + args[1]))
 		}
 	}
 }
