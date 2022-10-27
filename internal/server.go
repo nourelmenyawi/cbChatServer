@@ -58,7 +58,7 @@ func (s *server) createClient(conn net.Conn) {
 
 	for {
 		name := s.addName(c)
-		if s.checkName(c, name) {
+		if s.checkName(name) {
 			c.name = name
 			c.msg(fmt.Sprintf("All right, I will call you %s", c.name))
 			break
@@ -68,8 +68,7 @@ func (s *server) createClient(conn net.Conn) {
 	}
 	for {
 		if s.checkPassword(c) {
-			log.Printf("%s has connected to the sever", conn.RemoteAddr().String())
-			log.Printf("Password correct")
+			log.Printf("%s has connected to the sever", c.name)
 			s.members[c.conn.RemoteAddr()] = c
 			s.readInput(c)
 			break
@@ -91,7 +90,7 @@ func(s *server) addName(c *client) string{
 	return name
 }
 
-func(s *server) checkName(c*client, name string) bool{
+func(s *server) checkName(name string) bool{
 	for _, list := range s.members{
 		if name == list.name {
 			return false
@@ -171,6 +170,18 @@ func (s *server) readInput(c *client) {
 				client: c,
 				args:   args,
 			}
+		case "/list":
+			c.commands <- command{
+				id:     CMD_LIST,
+				client: c,
+				args:   args,
+			}
+		case "/help":
+			c.commands <- command{
+				id:     CMD_HELP,
+				client: c,
+				args:   args,
+			}
 		default:
 			c.err(fmt.Errorf("unknown command: %s", cmd))
 		}
@@ -185,19 +196,23 @@ func (s *server) run() {
 		case CMD_MSG:
 			s.msg(cmd.client, cmd.args)
 		case CMD_QUIT:
-			s.quit(cmd.client, cmd.args)
+			s.quit(cmd.client)
 		case CMD_SHOUT:
 			s.shout(cmd.client, cmd.args)
 		case CMD_SPAM:
 			s.spam(cmd.client, cmd.args)
 		case CMD_WHISPER:
 			s.whisper(cmd.client, cmd.args)
+		case CMD_LIST:
+			s.list(cmd.client)
+		case CMD_HELP:
+			s.help(cmd.client)
 		}
 	}
 }
 
 func (s *server) name(c *client, args []string) {
-	if s.checkName(c, args[1]) {
+	if s.checkName(args[1]) {
 		c.name = args[1]
 		c.msg(fmt.Sprintf("All right, I will call you %s", c.name))
 		log.Printf("%s has named themselves %s", c.conn.RemoteAddr().String(), c.name)
@@ -211,11 +226,12 @@ func (s *server) msg(c *client, args []string) {
 	s.broadcast(c, msg)
 }
 
-func (s *server) quit(c *client, args []string) {
+func (s *server) quit(c *client) {
 	message := c.name + " has left the chat"
 	c.msg("You have left the server")
 	c.conn.Close()
 	s.broadcast(c, message)
+	log.Print(message)
 }
 
 func (s *server) shout(c *client, args []string) {
@@ -241,9 +257,21 @@ func (s *server) whisper(sender *client, args []string) {
 	msg := sender.name + ": " + strings.Join(args[2:], " ")
 	for _, m := range s.members {
 		if args[1] == m.name {
-			m.conn.Write([]byte("> " + msg + "\n"))
-		} else {
-			sender.conn.Write([]byte("Could not find " + args[1]))
-		}
+			m.conn.Write([]byte(">(whisper) " + msg + "\n"))
+			sender.conn.Write([]byte(">(whisper) " + msg + "\n"))
+		} 
 	}
+	if s.checkName(args[1]){
+		sender.conn.Write([]byte("Could not find " + args[1]))
+	}
+}
+
+func (s *server) list(sender *client) {
+	for _, m := range s.members {
+		sender.conn.Write([]byte("> " + m.name + "\n"))
+	}
+}
+
+func (s *server) help(sender *client) {
+	sender.conn.Write([]byte("\n/name\n/msg\n/shout\n/spam\n/whisper\n/list\n/quit\n/help\n"))
 }

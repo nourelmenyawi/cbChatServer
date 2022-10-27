@@ -9,6 +9,8 @@ const (
 	CMD_SHOUT
 	CMD_SPAM
 	CMD_WHISPER
+	CMD_LIST
+	CMD_HELP
 )
 
 type command struct {
