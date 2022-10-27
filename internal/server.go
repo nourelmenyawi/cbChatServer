@@ -12,7 +12,7 @@ import (
 )
 
 type server struct {
-	members  map[net.Addr]*client
+	members  map[string]*client
 	commands chan command
 }
 
@@ -44,7 +44,7 @@ func NewServer() {
 
 func createServer() *server {
 	return &server{
-		members:  make(map[net.Addr]*client),
+		members:  make(map[string]*client),
 		commands: make(chan command),
 	}
 }
@@ -69,7 +69,7 @@ func (s *server) createClient(conn net.Conn) {
 	for {
 		if s.checkPassword(c) {
 			log.Printf("%s has connected to the sever", c.name)
-			s.members[c.conn.RemoteAddr()] = c
+			s.members[c.name] = c
 			s.readInput(c)
 			break
 		}
@@ -91,21 +91,14 @@ func(s *server) addName(c *client) string{
 }
 
 func(s *server) checkName(name string) bool{
-	for _, list := range s.members{
-		if name == list.name {
-			return false
-		} 
-	}
-	return true
+	return s.members[name] == nil
 }
 
 func (s *server) checkPassword(c *client) bool {
 	c.msg("Enter Password: ")
 	password, err := bufio.NewReader(c.conn).ReadString('\n')
-
 	password = strings.Trim(password, "\r\n")
 	args := strings.Split(password, " ")
-
 	pass := strings.TrimSpace(args[0])
 
 	if err != nil {
@@ -116,7 +109,7 @@ func (s *server) checkPassword(c *client) bool {
 		c.msg("Correct Password, Welcome to the Server!")
 		return true
 	} else {
-		c.msg("Incorrect Password, Try again")
+		c.msg("Incorrect Password, Please try again")
 		return false
 	}
 }
@@ -255,15 +248,13 @@ func (s *server) broadcast(sender *client, msg string) {
 
 func (s *server) whisper(sender *client, args []string) {
 	msg := sender.name + ": " + strings.Join(args[2:], " ")
-	for _, m := range s.members {
-		if args[1] == m.name {
-			m.conn.Write([]byte(">(whisper) " + msg + "\n"))
-			sender.conn.Write([]byte(">(whisper) " + msg + "\n"))
-		} 
-	}
-	if s.checkName(args[1]){
+	if s.members[args[1]] != nil {
+		s.members[args[1]].conn.Write([]byte(">(whisper) " + msg + "\n"))
+		sender.conn.Write([]byte(">(whisper) " + msg + "\n"))
+	} else {
 		sender.conn.Write([]byte("Could not find " + args[1]))
 	}
+
 }
 
 func (s *server) list(sender *client) {
