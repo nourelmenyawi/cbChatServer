@@ -43,6 +43,7 @@ func NewServer() {
 }
 
 func createServer() *server {
+	//returns pointer of type server containing the members map and commands channel
 	return &server{
 		members:  make(map[string]*client),
 		commands: make(chan command),
@@ -50,12 +51,14 @@ func createServer() *server {
 }
 
 func (s *server) createClient(conn net.Conn) {
+	//initialises c pointer for every client 
 	c := &client{
 		conn:     conn,
 		name:     "anonymous",
 		commands: s.commands,
 	}
 
+	//Requests clients to enter a name and saves it into the members map
 	for {
 		name := s.inputName(c)
 		if s.checkNameIsUnique(name) {
@@ -66,6 +69,8 @@ func (s *server) createClient(conn net.Conn) {
 			c.msg("This name already exists, please enter another name")
 		}
 	}
+
+	//Requests password for server
 	for  {
 		if s.checkPassword(c) {
 			log.Printf("%s has connected to the sever", c.name)
@@ -77,6 +82,7 @@ func (s *server) createClient(conn net.Conn) {
 }
 
 func(s *server) inputName(c *client) string{
+	//Asks the user to enter a name and formats it
 	c.msg("What should I call you?")
 	name, err := bufio.NewReader(c.conn).ReadString('\n')
 
@@ -91,10 +97,12 @@ func(s *server) inputName(c *client) string{
 }
 
 func(s *server) checkNameIsUnique(name string) bool{
+	//check if the name exists in the map 
 	return s.members[name] == nil
 }
 
 func (s *server) checkPassword(c *client) bool {
+	//Asks user to enter password and checks it 
 	c.msg("Enter Password: ")
 	password, err := bufio.NewReader(c.conn).ReadString('\n')
 	password = strings.Trim(password, "\r\n")
@@ -115,17 +123,20 @@ func (s *server) checkPassword(c *client) bool {
 }
 
 func (s *server) readInput(c *client) {
+	//Read input coming from each client's connection
 	for {
 		msg, err := bufio.NewReader(c.conn).ReadString('\n')
 		if err != nil {
 			return
 		}
 
+		//Splits the input from the client into a command and a message
 		msg = strings.Trim(msg, "\r\n")
 		args := strings.Split(msg, " ")
 
 		cmd := strings.TrimSpace(args[0])
 
+		//Based on the commands assign the type of process to the client commands channel
 		switch cmd {
 		case "/name":
 			c.commands <- command{
@@ -182,6 +193,7 @@ func (s *server) readInput(c *client) {
 }
 
 func (s *server) run() {
+	//check the command sent by the client and call the function corresponding to it 
 	for cmd := range s.commands {
 		switch cmd.id {
 		case CMD_NAME:
@@ -204,6 +216,7 @@ func (s *server) run() {
 	}
 }
 
+//Setting a name for the user
 func (s *server) name(c *client, args []string) {
 	if s.checkNameIsUnique(args[1]) {
 		c.name = args[1]
@@ -214,11 +227,13 @@ func (s *server) name(c *client, args []string) {
 	}
 }
 
+//Sends a message to the entire server
 func (s *server) msg(c *client, args []string) {
 	msg := c.name + ": " + strings.Join(args[1:], " ")
 	s.broadcast(c, msg)
 }
 
+//Quits the user from the server
 func (s *server) quit(c *client) {
 	message := c.name + " has left the chat"
 	c.msg("You have left the server")
@@ -227,12 +242,14 @@ func (s *server) quit(c *client) {
 	log.Print(message)
 }
 
+//Shouts a message on the server (Upper case all letters)
 func (s *server) shout(c *client, args []string) {
 	msg := strings.Join(args[1:], " ")
 	shoutMsg := c.name + ": " + strings.ToUpper(msg)
 	s.broadcast(c, shoutMsg)
 }
 
+//Sends the same message 5 times
 func (s *server) spam(c *client, args []string) {
 	msg := c.name + ": " + strings.Join(args[1:], " ")
 	for i:= 0 ; i < 5; i++ { 
@@ -240,14 +257,18 @@ func (s *server) spam(c *client, args []string) {
 	}
 }
 
+//writes a message to every client connection
 func (s *server) broadcast(sender *client, msg string) {
 	for _, m := range s.members {
 		m.conn.Write([]byte("> " + msg + "\n"))
 	}
 }
 
+//Allows user to send a message to a specific user
 func (s *server) whisper(sender *client, args []string) {
 	msg := sender.name + ": " + strings.Join(args[2:], " ")
+
+	//checks if the recepient set by the sender exists, if not reply back with could not find
 	if s.members[args[1]] != nil {
 		s.members[args[1]].conn.Write([]byte(">(whisper) " + msg + "\n"))
 		sender.conn.Write([]byte(">(whisper) " + msg + "\n"))
@@ -257,12 +278,14 @@ func (s *server) whisper(sender *client, args []string) {
 
 }
 
+//Lists all members connected to the server
 func (s *server) list(sender *client) {
 	for _, m := range s.members {
 		sender.conn.Write([]byte("> " + m.name + "\n"))
 	}
 }
 
+//Lists all commands
 func (s *server) help(sender *client) {
 	sender.conn.Write([]byte("\n/name\n/msg\n/shout\n/spam\n/whisper\n/list\n/quit\n/help\n"))
 }

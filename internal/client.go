@@ -21,7 +21,7 @@ func NewClient() {
 	if err != nil {
 		log.Printf("unable to accept new connection: %s", err.Error())
 	}
-	wg.Add(2)
+	wg.Add(1)
 	go sendMsg(conn)
 	go readMsg(conn, &wg)
 	wg.Wait()
@@ -51,7 +51,7 @@ func readMsg(conn net.Conn, wg *sync.WaitGroup) {
 		messageLength, messageError := conn.Read(messageBuffer)
 
 		if messageError != nil {
-			os.Exit(1)
+			break
 		}
 
 		fmt.Printf("%s\n", string(messageBuffer[:messageLength]))
