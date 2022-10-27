@@ -57,8 +57,8 @@ func (s *server) createClient(conn net.Conn) {
 	}
 
 	for {
-		name := s.addName(c)
-		if s.checkName(name) {
+		name := s.inputName(c)
+		if s.checkNameIsUnique(name) {
 			c.name = name
 			c.msg(fmt.Sprintf("All right, I will call you %s", c.name))
 			break
@@ -66,7 +66,7 @@ func (s *server) createClient(conn net.Conn) {
 			c.msg("This name already exists, please enter another name")
 		}
 	}
-	for {
+	for  {
 		if s.checkPassword(c) {
 			log.Printf("%s has connected to the sever", c.name)
 			s.members[c.name] = c
@@ -76,7 +76,7 @@ func (s *server) createClient(conn net.Conn) {
 	}
 }
 
-func(s *server) addName(c *client) string{
+func(s *server) inputName(c *client) string{
 	c.msg("What should I call you?")
 	name, err := bufio.NewReader(c.conn).ReadString('\n')
 
@@ -90,7 +90,7 @@ func(s *server) addName(c *client) string{
 	return name
 }
 
-func(s *server) checkName(name string) bool{
+func(s *server) checkNameIsUnique(name string) bool{
 	return s.members[name] == nil
 }
 
@@ -205,7 +205,7 @@ func (s *server) run() {
 }
 
 func (s *server) name(c *client, args []string) {
-	if s.checkName(args[1]) {
+	if s.checkNameIsUnique(args[1]) {
 		c.name = args[1]
 		c.msg(fmt.Sprintf("All right, I will call you %s", c.name))
 		log.Printf("%s has named themselves %s", c.conn.RemoteAddr().String(), c.name)
