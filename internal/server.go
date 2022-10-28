@@ -6,9 +6,9 @@ import (
 	"net"
 	"strings"
 
-	//	"sync"
+	//"sync"
 	"bufio"
-	// "os"
+
 )
 
 type server struct {
@@ -29,7 +29,7 @@ func NewServer() {
 	}
 
 	defer listener.Close()
-	log.Printf("Started server on :8800")
+	log.Printf("Started server on :8000")
 
 	//Accept new clients
 	for {
@@ -66,7 +66,7 @@ func (s *server) createClient(conn net.Conn) {
 			c.msg(fmt.Sprintf("All right, I will call you %s", c.name))
 			break
 		} else {
-			c.msg("This name already exists, please enter another name")
+			c.err(fmt.Errorf("%s already exists, please enter another name", name))
 		}
 	}
 
@@ -117,7 +117,7 @@ func (s *server) checkPassword(c *client) bool {
 		c.msg("Correct Password, Welcome to the Server!")
 		return true
 	} else {
-		c.msg("Incorrect Password, Please try again")
+		c.err(fmt.Errorf("incorrect Password, Please try again"))
 		return false
 	}
 }
@@ -223,7 +223,7 @@ func (s *server) name(c *client, args []string) {
 		c.msg(fmt.Sprintf("All right, I will call you %s", c.name))
 		log.Printf("%s has named themselves %s", c.conn.RemoteAddr().String(), c.name)
 	} else {
-		c.msg("This name already exists, please enter another name")
+		c.err(fmt.Errorf("%s already exists, please enter another name", args[1]))
 	}
 }
 
@@ -237,6 +237,7 @@ func (s *server) msg(c *client, args []string) {
 func (s *server) quit(c *client) {
 	message := c.name + " has left the chat"
 	c.msg("You have left the server")
+	delete(s.members, c.name)
 	c.conn.Close()
 	s.broadcast(c, message)
 	log.Print(message)
@@ -273,7 +274,7 @@ func (s *server) whisper(sender *client, args []string) {
 		s.members[args[1]].conn.Write([]byte(">(whisper) " + msg + "\n"))
 		sender.conn.Write([]byte(">(whisper) " + msg + "\n"))
 	} else {
-		sender.conn.Write([]byte("Could not find " + args[1]))
+		sender.err(fmt.Errorf("could not find %s", args[1]))
 	}
 
 }

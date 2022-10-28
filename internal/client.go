@@ -21,13 +21,14 @@ func NewClient() {
 	if err != nil {
 		log.Printf("unable to accept new connection: %s", err.Error())
 	}
-	wg.Add(1)
-	go sendMsg(conn)
+	wg.Add(2)
+	go sendMsg(conn, &wg)
 	go readMsg(conn, &wg)
 	wg.Wait()
 }
 
-func sendMsg(conn net.Conn) {
+func sendMsg(conn net.Conn, wg *sync.WaitGroup) {
+	defer wg.Done()
 	for {
 		scanner := bufio.NewScanner(os.Stdin)
 		scanner.Scan()
@@ -51,7 +52,7 @@ func readMsg(conn net.Conn, wg *sync.WaitGroup) {
 		messageLength, messageError := conn.Read(messageBuffer)
 
 		if messageError != nil {
-			break
+			os.Exit(1)
 		}
 
 		fmt.Printf("%s\n", string(messageBuffer[:messageLength]))
@@ -66,3 +67,11 @@ func (c *client) err(err error) {
 func (c *client) msg(msg string) {
 	c.conn.Write([]byte("> " + msg + "\n"))
 }
+
+// func (c *client) disconnected(i int) bool{
+// 	if i == 1 {
+// 		c.conn.Close()
+// 		return true
+// 	} else {return false
+// 	}
+// }
